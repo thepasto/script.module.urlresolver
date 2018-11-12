@@ -22,6 +22,7 @@ import json
 from urlresolver import common
 from urlresolver.resolver import UrlResolver, ResolverError
 
+
 class VivosxResolver(UrlResolver):
     name = "vivosx"
     domains = ["vivo.sx"]
@@ -31,21 +32,28 @@ class VivosxResolver(UrlResolver):
         self.net = common.Net()
 
     def get_media_url(self, host, media_id):
+
         web_url = self.get_url(host, media_id)
 
-        # get landing page
         resp = self.net.http_GET(web_url, headers={'Referer': web_url})
         html = resp.content
 
-        r = re.search(r'Core\.InitializeStream \(\'(.*?)\'\)', html)
-        if not r: raise ResolverError('page structure changed')
+        r = re.search(r'data-stream\s*=\s*(["\'])(?P<url>(?:(?!\1).)+)\1', html)
 
-        b = base64.b64decode(r.group(1))
-        j = json.loads(b)
+        if not r:
+            raise ResolverError('page structure changed')
 
-        if len(j) == 0: raise ResolverError('video not found')
+        r_url = base64.b64decode(r.group('url')).decode('utf-8')
 
-        return j[0]
+        if re.match(r'^(?:[a-zA-Z][\da-zA-Z.+-]*:)?//', r_url):
+            stream_url = r_url
+        else:
+            stream_url = None
+
+        if stream_url:
+            return stream_url
+        else:
+            raise ResolverError('video not found')
 
     def get_url(self, host, media_id):
         return 'http://vivo.sx/%s' % media_id
